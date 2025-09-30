@@ -1,0 +1,40 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flusk-notification-controller
+  namespace: flusk-notifications
+  labels:
+    app: flusk-notification-controller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: flusk-notification-controller
+  template:
+    metadata:
+      labels:
+        app: flusk-notification-controller
+    spec:
+      serviceAccountName: flusk-notification-controller
+      containers:
+        - name: controller
+          image: YOUR_DOCKERHUB_USERNAME/flusk-notification-controller:v1.0.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: SLACK_WEBHOOK_URL
+              valueFrom:
+                secretKeyRef:
+                  name: slack-webhook
+                  key: url
+            - name: MONITORED_NAMESPACES
+              value: "production,staging"
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+      imagePullSecrets:
+        - name: gcr-secret

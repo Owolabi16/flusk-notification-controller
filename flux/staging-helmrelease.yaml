@@ -1,0 +1,40 @@
+---
+apiVersion: source.toolkit.fluxcd.io/v1beta2
+kind: GitRepository
+metadata:
+  name: sample-app-repo
+  namespace: staging
+spec:
+  interval: 1m
+  url: https://github.com/YOUR_USERNAME/YOUR_REPO
+  ref:
+    branch: staging
+  secretRef:
+    name: github-credentials  # Optional if public repo
+
+---
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: sample-app
+  namespace: staging
+spec:
+  interval: 5m
+  chart:
+    spec:
+      chart: ./sample-app/helm-chart
+      sourceRef:
+        kind: GitRepository
+        name: sample-app-repo
+        namespace: staging
+  values:
+    replicaCount: 2
+    image:
+      repository: YOUR_DOCKERHUB_USERNAME/sample-app
+      tag: "v1.0.0-staging"
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
