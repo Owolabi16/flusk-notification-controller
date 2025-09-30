@@ -2,5 +2,5 @@ apiVersion: v2
 name: sample-app
 description: A sample application for testing Flusk notifications
 type: application
-version: 1.0.0
-appVersion: "v1.0.0"
+version: v1.0.12
+appVersion: "v1.0.12"

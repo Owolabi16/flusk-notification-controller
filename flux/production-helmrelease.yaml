@@ -30,8 +30,8 @@ spec:
   values:
     replicaCount: 3
     image:
-      repository: YOUR_DOCKERHUB_USERNAME/sample-app
-      tag: "v1.0.0"
+      repository: owolabialiu/sample-app
+      tag: "v1.0.12"
   install:
     remediation:
       retries: 3
