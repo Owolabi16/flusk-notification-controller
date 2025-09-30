@@ -1,6 +1,0 @@
-apiVersion: v2
-name: sample-app
-description: A sample application for testing Flusk notifications
-type: application
-version: v1.0.13
-appVersion: "v1.0.13"

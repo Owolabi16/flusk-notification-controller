@@ -4,7 +4,6 @@ metadata:
   name: {{ .Chart.Name }}
   labels:
     app: {{ .Chart.Name }}
-    version: {{ .Chart.AppVersion }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
@@ -14,7 +13,6 @@ spec:
     metadata:
       labels:
         app: {{ .Chart.Name }}
-        version: {{ .Chart.AppVersion }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
