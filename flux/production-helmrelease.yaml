@@ -6,7 +6,7 @@ metadata:
   namespace: production
 spec:
   interval: 1m
-  url: https://github.com/YOUR_USERNAME/YOUR_REPO
+  url: https://github.com/Owolabi16/flusk-notification-controller
   ref:
     branch: main
   secretRef:

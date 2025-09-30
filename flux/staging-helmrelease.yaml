@@ -6,7 +6,7 @@ metadata:
   namespace: staging
 spec:
   interval: 1m
-  url: https://github.com/YOUR_USERNAME/YOUR_REPO
+  url: https://github.com/Owolabi16/flusk-notification-controller
   ref:
     branch: staging
   secretRef:
@@ -30,7 +30,7 @@ spec:
   values:
     replicaCount: 2
     image:
-      repository: YOUR_DOCKERHUB_USERNAME/sample-app
+      repository: owolabialiu/sample-app
       tag: "v1.0.0-staging"
   install:
     remediation:

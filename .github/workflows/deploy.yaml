@@ -1,14 +1,13 @@
-name: Build, Push and Auto-Deploy.
+name: Build and Auto-Deploy
 
 on:
   push:
     branches:
-      - main        # Production deployments
-      - staging     # Staging deployments.
+      - main
+      - staging
     paths:
-      - '**'
+      - 'sample-app/**'
       - 'flux/**'
-      - '.github/workflows/**'
 
 env:
   DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -19,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -27,16 +26,15 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       
-      - name: Log in to Docker Hub
+      - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       
-      - name: Determine environment and version
-        id: env_version
+      - name: Determine version
+        id: version
         run: |
-          # Determine environment based on branch
           if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
             echo "environment=production" >> $GITHUB_OUTPUT
             echo "version=v1.0.${{ github.run_number }}" >> $GITHUB_OUTPUT
@@ -44,80 +42,36 @@ jobs:
             echo "environment=staging" >> $GITHUB_OUTPUT
             echo "version=v1.0.${{ github.run_number }}-staging" >> $GITHUB_OUTPUT
           fi
-          
-          # Generate short SHA for additional tagging
-          echo "short_sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
       
-      - name: Build and push Docker image
+      - name: Build and push
         uses: docker/build-push-action@v5
         with:
           context: ./sample-app
           push: true
           tags: |
-            ${{ env.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ steps.env_version.outputs.version }}
-            ${{ env.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ steps.env_version.outputs.short_sha }}
-            ${{ env.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ steps.env_version.outputs.environment }}-latest
-          cache-from: type=registry,ref=${{ env.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:buildcache
-          cache-to: type=registry,ref=${{ env.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
+            ${{ env.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+            ${{ env.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.environment }}-latest
       
-      - name: Update Helm Chart version
+      - name: Update manifests
         run: |
-          # Update Chart.yaml
-          sed -i "s/^version:.*/version: ${{ steps.env_version.outputs.version }}/" my-app-chart/Chart.yaml
-          sed -i "s/^appVersion:.*/appVersion: \"${{ steps.env_version.outputs.version }}\"/" my-app-chart/Chart.yaml
-          
-          echo "📝 Updated Chart.yaml:"
-          cat my-app-chart/Chart.yaml
+          sed -i "s/version:.*/version: ${{ steps.version.outputs.version }}/" sample-app/helm-chart/Chart.yaml
+          sed -i "s/appVersion:.*/appVersion: \"${{ steps.version.outputs.version }}\"/" sample-app/helm-chart/Chart.yaml
+          sed -i "s|repository:.*|repository: ${{ env.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}|" sample-app/helm-chart/values.yaml
+          sed -i "s|tag:.*|tag: \"${{ steps.version.outputs.version }}\"|" sample-app/helm-chart/values.yaml
+          sed -i "s|repository:.*|repository: ${{ env.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}|" flux/${{ steps.version.outputs.environment }}-helmrelease.yaml
+          sed -i "s|tag:.*|tag: \"${{ steps.version.outputs.version }}\"|" flux/${{ steps.version.outputs.environment }}-helmrelease.yaml
       
-      - name: Update HelmRelease manifest
+      - name: Commit changes
         run: |
-          # Update the image tag in the HelmRelease for the current environment
-          sed -i "s|repository:.*|repository: ${{ env.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}|" \
-            flux/${{ steps.env_version.outputs.environment }}-helmrelease.yaml
-          
-          sed -i "s|tag:.*|tag: \"${{ steps.env_version.outputs.version }}\"|" \
-            flux/${{ steps.env_version.outputs.environment }}-helmrelease.yaml
-          
-          echo "📝 Updated HelmRelease:"
-          cat flux/${{ steps.env_version.outputs.environment }}-helmrelease.yaml
-      
-      - name: Update values.yaml
-        run: |
-          # Update default values.yaml with Docker Hub repo
-          sed -i "s|repository:.*|repository: ${{ env.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}|" \
-            my-app-chart/values.yaml
-          
-          sed -i "s|tag:.*|tag: \"${{ steps.env_version.outputs.version }}\"|" \
-            my-app-chart/values.yaml
-          
-          echo "📝 Updated values.yaml:"
-          cat my-app-chart/values.yaml
-      
-      - name: Commit and push changes
-        run: |
-          git config --local user.email "you@example.com"
-          git config --local user.name "Aliu"
-          
-          git add my-app-chart/Chart.yaml
-          git add my-app-chart/values.yaml
-          git add flux/${{ steps.env_version.outputs.environment }}-helmrelease.yaml
-          
-          git commit -m "🚀 Auto-deploy ${{ steps.env_version.outputs.version }} to ${{ steps.env_version.outputs.environment }}" || echo "No changes to commit"
-          
-          git push https://x-access-token:${{ secrets.PAT_TOKEN }}@github.com/Owolabi16/flusk-notification-controller.git
-        env:
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}          
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add sample-app/helm-chart/Chart.yaml sample-app/helm-chart/values.yaml flux/${{ steps.version.outputs.environment }}-helmrelease.yaml
+          git commit -m "🚀 Deploy ${{ steps.version.outputs.version }} to ${{ steps.version.outputs.environment }}" || echo "No changes"
+          git push
       
       - name: Summary
         run: |
-          echo "### 🎉 Deployment Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Environment:** ${{ steps.env_version.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Version:** ${{ steps.env_version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Image:** ${{ env.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ steps.env_version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Commit:** ${{ steps.env_version.outputs.short_sha }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Image built and pushed to Docker Hub" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Manifests updated and committed" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Flux will automatically deploy in ~1-5 minutes" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Slack notification will be sent after deployment" >> $GITHUB_STEP_SUMMARY
+          echo "### 🎉 Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "- Environment: ${{ steps.version.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Version: ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Image: ${{ env.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
