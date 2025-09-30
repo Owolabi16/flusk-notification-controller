@@ -104,7 +104,7 @@ jobs:
           
           git commit -m "🚀 Auto-deploy ${{ steps.env_version.outputs.version }} to ${{ steps.env_version.outputs.environment }}" || echo "No changes to commit"
           
-          git push
+          git push https://x-access-token:${{ secrets.PAT_TOKEN }}@github.com/Owolabi16/flusk-notification-controller.git
         env:
           GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}          
       
