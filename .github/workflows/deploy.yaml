@@ -95,6 +95,9 @@ jobs:
       
       - name: Commit and push changes
         run: |
+          git config --local user.email "you@example.com"
+          git config --local user.name "Aliu"
+          
           git add my-app-chart/Chart.yaml
           git add my-app-chart/values.yaml
           git add flux/${{ steps.env_version.outputs.environment }}-helmrelease.yaml
