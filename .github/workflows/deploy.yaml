@@ -63,11 +63,11 @@ jobs:
       - name: Update Helm Chart version
         run: |
           # Update Chart.yaml
-          sed -i "s/^version:.*/version: ${{ steps.env_version.outputs.version }}/" sample-app/helm-chart/Chart.yaml
-          sed -i "s/^appVersion:.*/appVersion: \"${{ steps.env_version.outputs.version }}\"/" sample-app/helm-chart/Chart.yaml
+          sed -i "s/^version:.*/version: ${{ steps.env_version.outputs.version }}/" sample-app/my-app-chart/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"${{ steps.env_version.outputs.version }}\"/" sample-app/my-app-chart/Chart.yaml
           
           echo "📝 Updated Chart.yaml:"
-          cat sample-app/helm-chart/Chart.yaml
+          cat sample-app/my-app-chart/Chart.yaml
       
       - name: Update HelmRelease manifest
         run: |
@@ -85,21 +85,21 @@ jobs:
         run: |
           # Update default values.yaml with Docker Hub repo
           sed -i "s|repository:.*|repository: ${{ env.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}|" \
-            sample-app/helm-chart/values.yaml
+            sample-app/my-app-chart/values.yaml
           
           sed -i "s|tag:.*|tag: \"${{ steps.env_version.outputs.version }}\"|" \
-            sample-app/helm-chart/values.yaml
+            sample-app/my-app-chart/values.yaml
           
           echo "📝 Updated values.yaml:"
-          cat sample-app/helm-chart/values.yaml
+          cat sample-app/my-app-chart/values.yaml
       
       - name: Commit and push changes
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           
-          git add sample-app/helm-chart/Chart.yaml
-          git add sample-app/helm-chart/values.yaml
+          git add sample-app/my-app-chart/Chart.yaml
+          git add sample-app/my-app-chart/values.yaml
           git add flux/${{ steps.env_version.outputs.environment }}-helmrelease.yaml
           
           git commit -m "🚀 Auto-deploy ${{ steps.env_version.outputs.version }} to ${{ steps.env_version.outputs.environment }}" || echo "No changes to commit"
