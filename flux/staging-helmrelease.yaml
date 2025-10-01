@@ -10,7 +10,7 @@ spec:
   ref:
     branch: staging
   secretRef:
-    name: github-credentials  # Optional if public repo
+    name: github-credential  # Optional if public repo
 
 ---
 apiVersion: helm.toolkit.fluxcd.io/v2
