@@ -2,5 +2,5 @@ apiVersion: v2
 name: sample-app
 description: Sample application for Flusk notifications
 type: application
-version: v1.0.16-staging
-appVersion: "v1.0.16-staging"
+version: v1.0.17-staging
+appVersion: "v1.0.17-staging"
