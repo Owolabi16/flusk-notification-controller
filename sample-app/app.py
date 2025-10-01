@@ -3,7 +3,7 @@
 Simple Flask application for testing deployments
 """
 
-# Test change $(date)...
+# Test change $(date).
 
 from flask import Flask, jsonify
 import os
