@@ -19,7 +19,7 @@ spec:
       serviceAccountName: flusk-notification-controller
       containers:
         - name: controller
-          image: YOUR_DOCKERHUB_USERNAME/flusk-notification-controller:v1.0.0
+          image: owolabialiu/flusk-notification-controller:v1.0.0
           imagePullPolicy: IfNotPresent
           env:
             - name: SLACK_WEBHOOK_URL
