@@ -2,7 +2,7 @@ replicaCount: 2
 
 image:
   repository: owolabialiu/sample-app
-  tag: "v1.0.29"
+  tag: "v1.0.30"
   pullPolicy: IfNotPresent
 
 imagePullSecrets:
