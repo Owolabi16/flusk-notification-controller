@@ -19,7 +19,7 @@ metadata:
   name: sample-app
   namespace: production
 spec:
-  interval: 5m
+  interval: 1m
   chart:
     spec:
       chart: ./sample-app/helm-chart
