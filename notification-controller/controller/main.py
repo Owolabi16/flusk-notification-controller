@@ -6,6 +6,7 @@ from datetime import datetime
 from kubernetes import client, config, watch
 from kubernetes.client.rest import ApiException
 import requests
+import threading
 
 logging.basicConfig(
     level=logging.INFO,
@@ -109,19 +110,17 @@ class FluskNotificationController:
         except Exception as e:
             logger.error(f"Error sending notification: {e}")
 
-    def watch_helm_releases(self):
-        logger.info("Starting to watch HelmReleases...")
+    def watch_namespace(self, namespace):
+        """Watch a single namespace for HelmRelease changes"""
+        logger.info(f"Starting watch for namespace: {namespace}")
         w = watch.Watch()
         
-        for namespace in self.monitored_namespaces:
-            namespace = namespace.strip()
-            logger.info(f"Watching namespace: {namespace}")
-            
+        while True:
             try:
                 for event in w.stream(
                     self.custom_api.list_namespaced_custom_object,
                     group="helm.toolkit.fluxcd.io",
-                    version="v2beta1",
+                    version="v2",
                     namespace=namespace,
                     plural="helmreleases",
                     timeout_seconds=0
@@ -157,6 +156,22 @@ class FluskNotificationController:
             except Exception as e:
                 logger.error(f"Error watching namespace {namespace}: {e}")
                 time.sleep(5)
+
+    def watch_helm_releases(self):
+        """Start watching all monitored namespaces concurrently"""
+        logger.info("Starting to watch HelmReleases...")
+        
+        threads = []
+        for namespace in self.monitored_namespaces:
+            namespace = namespace.strip()
+            thread = threading.Thread(target=self.watch_namespace, args=(namespace,), daemon=True)
+            thread.start()
+            threads.append(thread)
+            logger.info(f"Started thread for namespace: {namespace}")
+        
+        # Keep main thread alive
+        for thread in threads:
+            thread.join()
 
     def run(self):
         logger.info("🚀 Flusk Notification Controller starting...")
