@@ -192,44 +192,55 @@ class FluskNotificationController:
                     plural="helmreleases",
                     timeout_seconds=0
                 ):
-                    helm_release = event['object']
-                    release_name = helm_release['metadata']['name']
-                    release_namespace = helm_release['metadata']['namespace']
+                    try:
+                        helm_release = event['object']
+                        release_name = helm_release['metadata']['name']
+                        release_namespace = helm_release['metadata']['namespace']
+                        
+                        status = helm_release.get('status', {})
+                        spec = helm_release.get('spec', {})
+                        revision = status.get('lastAppliedRevision', '')
+                        release_id = f"{release_namespace}/{release_name}/{revision}"
+                        
+                        # Get chart version from spec
+                        chart_version = spec.get('chart', {}).get('spec', {}).get('version', 'unknown')
+                        
+                        # Get app version - simplified approach
+                        # First try from status, then fall back to revision
+                        app_version = revision  # Default to revision
+                        
+                        # Try to get from status.lastAttemptedValuesChecksum or other fields
+                        if 'lastAttemptedRevision' in status:
+                            app_version = status.get('lastAttemptedRevision', revision)
+                        
+                        conditions = status.get('conditions', [])
+                        ready_condition = next((c for c in conditions if c.get('type') == 'Ready'), None)
+                        
+                        if ready_condition and ready_condition.get('status') == 'True':
+                            if release_id not in self.processed_releases:
+                                logger.info(f"🚀 New deployment: {release_name} in {release_namespace}")
+                                
+                                helm_info = {
+                                    'chart_version': chart_version,
+                                    'app_version': app_version,
+                                    'revision': revision,
+                                    'status': 'True'
+                                }
+                                
+                                deployment_info = self.get_deployment_info(release_namespace, release_name)
+                                
+                                if deployment_info:
+                                    self.send_slack_notification(release_namespace, release_name, helm_info, deployment_info)
+                                    self.processed_releases.add(release_id)
                     
-                    status = helm_release.get('status', {})
-                    spec = helm_release.get('spec', {})
-                    revision = status.get('lastAppliedRevision', '')
-                    release_id = f"{release_namespace}/{release_name}/{revision}"
-                    
-                    # Get both chart version and app version
-                    chart_version = spec.get('chart', {}).get('spec', {}).get('version', 'unknown')
-                    
-                    # Try to get app version from chart metadata
-                    chart_metadata = status.get('helmChart', {})
-                    app_version = chart_metadata.get('metadata', {}).get('appVersion', revision)
-                    
-                    conditions = status.get('conditions', [])
-                    ready_condition = next((c for c in conditions if c.get('type') == 'Ready'), None)
-                    
-                    if ready_condition and ready_condition.get('status') == 'True':
-                        if release_id not in self.processed_releases:
-                            logger.info(f"🚀 New deployment: {release_name} in {release_namespace}")
-                            
-                            helm_info = {
-                                'chart_version': chart_version,
-                                'app_version': app_version,
-                                'revision': revision,
-                                'status': 'True'
-                            }
-                            
-                            deployment_info = self.get_deployment_info(release_namespace, release_name)
-                            
-                            if deployment_info:
-                                self.send_slack_notification(release_namespace, release_name, helm_info, deployment_info)
-                                self.processed_releases.add(release_id)
+                    except Exception as e:
+                        logger.error(f"Error processing event in {namespace}: {e}")
+                        logger.debug(f"Event data: {event}")
+                        continue
+                        
             except Exception as e:
                 logger.error(f"Error watching namespace {namespace}: {e}")
-                time.sleep(5)                
+                time.sleep(5)
 
     def run(self):
         logger.info("🚀 Flusk Notification Controller starting...")
