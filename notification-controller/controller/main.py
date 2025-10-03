@@ -6,6 +6,7 @@ from datetime import datetime
 from kubernetes import client, config, watch
 from kubernetes.client.rest import ApiException
 import requests
+import threading
 
 logging.basicConfig(
     level=logging.INFO,
@@ -176,55 +177,6 @@ class FluskNotificationController:
     #     except Exception as e:
     #         logger.error(f"Error sending notification: {e}")
 
-    def watch_helm_releases(self):
-        logger.info("Starting to watch HelmReleases...")
-        w = watch.Watch()
-        
-        for namespace in self.monitored_namespaces:
-            namespace = namespace.strip()
-            logger.info(f"Watching namespace: {namespace}")
-            
-            try:
-                for event in w.stream(
-                    self.custom_api.list_namespaced_custom_object,
-                    group="helm.toolkit.fluxcd.io",
-                    version="v2beta1",
-                    namespace=namespace,
-                    plural="helmreleases",
-                    timeout_seconds=0
-                ):
-                    helm_release = event['object']
-                    release_name = helm_release['metadata']['name']
-                    release_namespace = helm_release['metadata']['namespace']
-                    
-                    status = helm_release.get('status', {})
-                    spec = helm_release.get('spec', {})
-                    revision = status.get('lastAppliedRevision', '')
-                    release_id = f"{release_namespace}/{release_name}/{revision}"
-                    
-                    chart_version = spec.get('chart', {}).get('spec', {}).get('version', 'unknown')
-                    conditions = status.get('conditions', [])
-                    ready_condition = next((c for c in conditions if c.get('type') == 'Ready'), None)
-                    
-                    if ready_condition and ready_condition.get('status') == 'True':
-                        if release_id not in self.processed_releases:
-                            logger.info(f"🚀 New deployment: {release_name} in {release_namespace}")
-                            
-                            helm_info = {
-                                'chart_version': chart_version,
-                                'revision': revision,
-                                'status': 'True'
-                            }
-                            
-                            deployment_info = self.get_deployment_info(release_namespace, release_name)
-                            
-                            if deployment_info:
-                                self.send_slack_notification(release_namespace, release_name, helm_info, deployment_info)
-                                self.processed_releases.add(release_id)
-            except Exception as e:
-                logger.error(f"Error watching namespace {namespace}: {e}")
-                time.sleep(5)
-
     def watch_namespace(self, namespace):
         """Watch a single namespace for HelmRelease changes"""
         logger.info(f"Starting watch for namespace: {namespace}")
@@ -281,15 +233,21 @@ class FluskNotificationController:
 
     def run(self):
         logger.info("🚀 Flusk Notification Controller starting...")
-        while True:
-            try:
-                self.watch_helm_releases()
-            except KeyboardInterrupt:
-                logger.info("Shutting down...")
-                break
-            except Exception as e:
-                logger.error(f"Error: {e}")
-                time.sleep(10)
+        
+        threads = []
+        for namespace in self.monitored_namespaces:
+            namespace = namespace.strip()
+            thread = threading.Thread(target=self.watch_namespace, args=(namespace,), daemon=True)
+            thread.start()
+            threads.append(thread)
+            logger.info(f"Started thread for namespace: {namespace}")
+        
+        # Keep main thread alive
+        try:
+            for thread in threads:
+                thread.join()
+        except KeyboardInterrupt:
+            logger.info("Shutting down...")
 
 if __name__ == "__main__":
     controller = FluskNotificationController()
