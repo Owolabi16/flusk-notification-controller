@@ -31,7 +31,7 @@ spec:
     replicaCount: 2
     image:
       repository: owolabialiu/sample-app
-      tag: "v1.0.50-staging"
+      tag: "v1.0.51-staging"
   install:
     remediation:
       retries: 3
