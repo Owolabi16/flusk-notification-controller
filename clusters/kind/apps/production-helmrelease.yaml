@@ -9,8 +9,6 @@ spec:
   url: https://github.com/Owolabi16/flusk-notification-controller
   ref:
     branch: main
-  secretRef:
-    name: github-credentials  # Optional if public repo
 
 ---
 apiVersion: helm.toolkit.fluxcd.io/v2
