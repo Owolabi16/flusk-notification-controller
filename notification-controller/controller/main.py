@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.
+#!/usr/bin/env python3
 import os
 import time
 import logging
@@ -33,6 +33,7 @@ class FluskNotificationController:
         
         self.monitored_namespaces = os.getenv('MONITORED_NAMESPACES', 'production,staging').split(',')
         self.processed_releases = set()
+        self.last_event_time = {}  # Track last event per namespace for health monitoring
         logger.info(f"Monitoring namespaces: {self.monitored_namespaces}")
 
     def get_deployment_info(self, namespace, deployment_name):
@@ -285,22 +286,27 @@ class FluskNotificationController:
 
     def watch_namespace(self, namespace):
         """
-        Watch a single namespace for HelmRelease changes
+        Watch a single namespace for HelmRelease changes with automatic reconnection
         """
-        logger.info(f"Starting watch for namespace: {namespace}")
-        w = watch.Watch()
+        logger.info(f"🔄 Starting watch for namespace: {namespace}")
         
         while True:
+            w = watch.Watch()
             try:
+                logger.info(f"🔌 Connecting watch stream for: {namespace}")
+                
                 for event in w.stream(
                     self.custom_api.list_namespaced_custom_object,
                     group="helm.toolkit.fluxcd.io",
                     version="v2",
                     namespace=namespace,
                     plural="helmreleases",
-                    timeout_seconds=0
+                    timeout_seconds=300  # 5 minute timeout, forces reconnection
                 ):
                     try:
+                        # Update last event time for health monitoring
+                        self.last_event_time[namespace] = time.time()
+                        
                         helm_release = event['object']
                         release_name = helm_release['metadata']['name']
                         release_namespace = helm_release['metadata']['namespace']
@@ -360,18 +366,69 @@ class FluskNotificationController:
                     except Exception as e:
                         logger.error(f"Error processing event in {namespace}: {e}", exc_info=True)
                         continue
-                        
+                
+                # If we exit the stream loop normally (timeout), reconnect
+                logger.info(f"⏱️  Watch stream timeout for {namespace}, reconnecting...")
+                
+            except ApiException as e:
+                if e.status == 410:
+                    # Resource version too old, normal reconnection
+                    logger.info(f"🔄 Watch expired for {namespace} (410 Gone), reconnecting...")
+                else:
+                    logger.error(f"❌ API error watching {namespace}: {e}")
+                time.sleep(2)
             except Exception as e:
-                logger.error(f"Error watching namespace {namespace}: {e}", exc_info=True)
+                logger.error(f"❌ Unexpected error watching {namespace}: {e}", exc_info=True)
                 time.sleep(5)
+            
+            # Always reconnect
+            logger.info(f"🔄 Reconnecting watch for {namespace} in 2 seconds...")
+            time.sleep(2)
+
+    def watchdog(self):
+        """
+        Monitor watch health and log status every minute
+        """
+        logger.info("🐕 Watchdog started")
+        while True:
+            time.sleep(60)  # Check every minute
+            now = time.time()
+            
+            for namespace in self.monitored_namespaces:
+                namespace = namespace.strip()
+                last_event = self.last_event_time.get(namespace, 0)
+                
+                if last_event > 0:
+                    elapsed = int(now - last_event)
+                    if elapsed > 600:  # More than 10 minutes
+                        logger.warning(f"⚠️  {namespace}: No events for {elapsed}s - watch may be stale")
+                    else:
+                        logger.info(f"💓 {namespace}: Healthy (last event {elapsed}s ago)")
+                else:
+                    logger.info(f"⏳ {namespace}: Waiting for first event")
 
     def run(self):
         """
         Main run loop - starts watching all monitored namespaces concurrently
         """
         logger.info("🚀 Flusk Notification Controller starting...")
+        logger.info(f"📡 Will monitor namespaces: {', '.join(self.monitored_namespaces)}")
+        logger.info(f"🔔 Slack notifications enabled")
+        logger.info(f"🔄 Auto-reconnect: Every 5 minutes")
+        logger.info(f"💓 Health checks: Every 60 seconds")
         
         threads = []
+        
+        # Start watchdog thread
+        watchdog_thread = threading.Thread(
+            target=self.watchdog,
+            daemon=True,
+            name="watchdog"
+        )
+        watchdog_thread.start()
+        logger.info("✅ Watchdog thread started")
+        
+        # Start namespace watcher threads
         for namespace in self.monitored_namespaces:
             namespace = namespace.strip()
             thread = threading.Thread(
@@ -382,16 +439,17 @@ class FluskNotificationController:
             )
             thread.start()
             threads.append(thread)
-            logger.info(f"Started thread for namespace: {namespace}")
+            logger.info(f"✅ Started watcher thread for: {namespace}")
         
-        logger.info(f"All watchers started. Monitoring {len(threads)} namespace(s).")
+        logger.info(f"✅ All systems operational! Monitoring {len(threads)} namespace(s)")
+        logger.info("=" * 60)
         
         # Keep main thread alive
         try:
             for thread in threads:
                 thread.join()
         except KeyboardInterrupt:
-            logger.info("Shutting down gracefully...")
+            logger.info("🛑 Shutting down gracefully...")
 
 
 if __name__ == "__main__":
