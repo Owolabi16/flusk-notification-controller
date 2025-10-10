@@ -1,0 +1,40 @@
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: sample-app-repo
+  namespace: production
+spec:
+  interval: 1m
+  url: https://github.com/Owolabi16/flusk-notification-controller
+  ref:
+    branch: main
+  secretRef:
+    name: github-credentials  # Optional if public repo
+
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: sample-app
+  namespace: production
+spec:
+  interval: 1m
+  chart:
+    spec:
+      chart: ./sample-app/helm-chart
+      sourceRef:
+        kind: GitRepository
+        name: sample-app-repo
+        namespace: production
+  values:
+    replicaCount: 3
+    image:
+      repository: owolabialiu/sample-app
+      tag: "v1.0.40"
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
